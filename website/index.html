@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent ID Pioneer Badge — Free claim for Agent ID holders</title>
+<style>
+  body { font-family: system-ui, -apple-system, sans-serif; background: #0b0e1a; color: #e8eaf2; margin: 0; padding: 0; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 40px 20px; text-align: center; }
+  img.badge { width: 260px; max-width: 80%; border-radius: 16px; }
+  h1 { font-size: 28px; margin: 24px 0 8px; }
+  p { color: #aab0c6; line-height: 1.6; }
+  button { background: #f0b90b; color: #111; border: none; padding: 12px 28px; font-size: 16px; font-weight: 700; border-radius: 10px; cursor: pointer; margin: 8px 4px; }
+  button:disabled { background: #555; color: #999; cursor: not-allowed; }
+  button.secondary { background: #22263a; color: #e8eaf2; }
+  #status { margin-top: 16px; min-height: 24px; color: #8fd3a8; }
+  .meta { font-size: 13px; color: #777d94; margin-top: 32px; word-break: break-all; }
+  .meta a { color: #f0b90b; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <img class="badge" src="assets/badge.webp" alt="Agent ID Pioneer Badge">
+  <h1>Agent ID Pioneer Badge</h1>
+  <p>A free, soulbound NFT badge for Binance Agent ID holders. If your wallet holds an Agent ID (<b>name.ai</b>), you can claim one badge — free, just pay gas. One per wallet, non-transferable, forever bound to you.</p>
+  <p>Built for the <b>Binance Agent ID Hackathon</b>. Contract on BNB Chain, open source.</p>
+  <div>
+    <button id="connectBtn">Connect Wallet</button>
+    <button id="claimBtn" disabled>Claim Badge (Free)</button>
+  </div>
+  <div id="status"></div>
+  <div class="meta">
+    <div>Badge contract: <a id="contractLink" href="#" target="_blank" rel="noopener">0x3E182eC2698Aee0229281417D1410F65A66AF237</a></div>
+    <div>Agent ID registry: 0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F</div>
+    <div>Max supply: 10,000 &middot; 1 per wallet &middot; Soulbound</div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"></script>
+<script>
+const CONTRACT = "0x3E182eC2698Aee0229281417D1410F65A66AF237";
+const REGISTRY = "0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F";
+const BSC_CHAIN_ID = 56;
+const ABI = [
+  "function claim()",
+  "function isEligible(address) view returns (bool)",
+  "function hasClaimed(address) view returns (bool)",
+  "function totalMinted() view returns (uint256)"
+];
+const REG_ABI = ["function balanceOf(address) view returns (uint256)"];
+const statusEl = document.getElementById("status");
+const connectBtn = document.getElementById("connectBtn");
+const claimBtn = document.getElementById("claimBtn");
+document.getElementById("contractLink").href = "https://bscscan.com/address/" + CONTRACT;
+
+let provider, signer, account, contract;
+
+function setStatus(msg) { statusEl.textContent = msg; }
+
+connectBtn.onclick = async () => {
+  if (!window.ethereum) { setStatus("No wallet found. Install MetaMask or open this in the Binance Wallet app."); return; }
+  try {
+    provider = new ethers.BrowserProvider(window.ethereum);
+    const net = await provider.getNetwork();
+    if (Number(net.chainId) !== BSC_CHAIN_ID) {
+      setStatus("Please switch your wallet to BNB Chain (chain 56).");
+      return;
+    }
+    await provider.send("eth_requestAccounts", []);
+    signer = await provider.getSigner();
+    account = await signer.getAddress();
+    contract = new ethers.Contract(CONTRACT, ABI, signer);
+    connectBtn.textContent = account.slice(0, 6) + "..." + account.slice(-4);
+    connectBtn.disabled = true;
+    const reg = new ethers.Contract(REGISTRY, REG_ABI, provider);
+    const bal = await reg.balanceOf(account);
+    if (bal === 0n) { setStatus("This wallet does not hold an Agent ID. Claim one in the Binance App first."); return; }
+    const claimed = await contract.hasClaimed(account);
+    if (claimed) { setStatus("You already claimed your badge. Thank you, Pioneer!"); return; }
+    const eligible = await contract.isEligible(account);
+    if (!eligible) { setStatus("Not eligible right now (supply may be exhausted)."); return; }
+    claimBtn.disabled = false;
+    setStatus("Agent ID confirmed. You can claim your free badge.");
+  } catch (e) {
+    setStatus("Connection failed: " + (e && e.message ? e.message : e));
+  }
+};
+
+claimBtn.onclick = async () => {
+  claimBtn.disabled = true;
+  setStatus("Sending claim transaction — confirm in your wallet...");
+  try {
+    const tx = await contract.claim();
+    setStatus("Transaction sent: " + tx.hash + " — waiting for confirmation...");
+    const receipt = await tx.wait();
+    if (receipt.status === 1) {
+      setStatus("Badge claimed! Welcome, Pioneer. View it on BscScan.");
+    } else {
+      setStatus("Transaction failed on-chain.");
+      claimBtn.disabled = false;
+    }
+  } catch (e) {
+    setStatus("Claim failed: " + (e && e.message ? e.message : e));
+    claimBtn.disabled = false;
+  }
+};
+</script>
+</body>
+</html>
